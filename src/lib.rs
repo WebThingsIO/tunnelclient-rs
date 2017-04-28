@@ -89,26 +89,29 @@ impl TunnelClient {
     // Renew the registration with a given local ip.
     // Will return false if this failed for any reason.
     pub fn register(&self, local_ip: &str) -> Result<(), TunnelClientError> {
-        if let Some(ref token) = self.token {
-            let client = Client::new().expect("Client creation failure");
-            return match client
-                             .get(&format!("{}/register?token={}&local_ip={}",
-                                           self.tunnel_url,
-                                           token,
-                                           local_ip))
-                             .send() {
-                       Ok(response) => {
-                           if *response.status() == StatusCode::Ok {
-                               Ok(())
-                           } else {
-                               Err(TunnelClientError::BadRequest)
-                           }
-                       }
-                       Err(err) => Err(TunnelClientError::from(err)),
-                   };
-        } else {
-            error!("No token available to register {}", local_ip);
-            return Err(TunnelClientError::NoToken);
+        match self.token {
+            Some(ref token) => {
+                let client = Client::new().expect("Client creation failure");
+                match client
+                          .get(&format!("{}/register?token={}&local_ip={}",
+                                        self.tunnel_url,
+                                        token,
+                                        local_ip))
+                          .send() {
+                    Ok(response) => {
+                        if *response.status() == StatusCode::Ok {
+                            Ok(())
+                        } else {
+                            Err(TunnelClientError::BadRequest)
+                        }
+                    }
+                    Err(err) => Err(TunnelClientError::from(err)),
+                }
+            }
+            None => {
+                error!("No token available to register {}", local_ip);
+                Err(TunnelClientError::NoToken)
+            }
         }
     }
 
