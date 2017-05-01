@@ -152,7 +152,7 @@ impl TunnelClient {
             let domains = [domain_str];
             let certificate_signer = account.certificate_signer(&domains);
             let cert = certificate_signer.sign_certificate()?;
-            cert.save_signed_certificate("certificate.pem")?;
+            cert.save_signed_certificate_and_chain(None, "certificate.pem")?;
             cert.save_private_key("privatekey.pem")?;
             info!("Certificate and private key for {} saved.", domain);
             return Ok(());
