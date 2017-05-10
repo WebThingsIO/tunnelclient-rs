@@ -126,30 +126,34 @@ impl TunnelClient {
 
         if let Some(ref token) = self.token {
 
-            let domain = format!("{}.box.{}", name, domain);
             let directory = Directory::lets_encrypt()?;
             let account = directory.account_registration().register()?;
 
-            let authorization = account.authorization(&domain)?;
-            let dns_challenge = match authorization.get_dns_challenge() {
-                Some(challenge) => challenge,
-                None => return Err(TunnelClientError::NoChallenge),
-            };
-            let signature = dns_challenge.signature()?;
+            let remote_domain = format!("{}.box.{}", name, domain);
+            let local_domain = format!("local.{}.box.{}", name, domain);
 
-            let client = Client::new().expect("Client creation failure");
-            client
-                .get(&format!("{}/dnsconfig?token={}&challenge={}",
-                              self.tunnel_url,
-                              token,
-                              signature))
-                .send()?;
+            let domains = [remote_domain.as_str(), local_domain.as_str()];
 
-            dns_challenge.validate()?;
-            info!("DNS challenge validated for {}", domain);
+            for domain in domains.iter() {
+                let authorization = account.authorization(&domain)?;
+                let dns_challenge = match authorization.get_dns_challenge() {
+                    Some(challenge) => challenge,
+                    None => return Err(TunnelClientError::NoChallenge),
+                };
+                let signature = dns_challenge.signature()?;
 
-            let domain_str = domain.as_str();
-            let domains = [domain_str];
+                let client = Client::new().expect("Client creation failure");
+                client
+                    .get(&format!("{}/dnsconfig?token={}&challenge={}",
+                                self.tunnel_url,
+                                token,
+                                signature))
+                    .send()?;
+
+                dns_challenge.validate()?;
+                info!("DNS challenge validated for {}", domain);
+            }
+
             let certificate_signer = account.certificate_signer(&domains);
             let cert = certificate_signer.sign_certificate()?;
             cert.save_signed_certificate_and_chain(None, "certificate.pem")?;

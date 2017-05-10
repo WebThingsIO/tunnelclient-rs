@@ -138,7 +138,7 @@ fn main() {
 
     let u_name = user_name.clone();
     let handle = thread::Builder::new()
-        .name("eviction".into())
+        .name("registration".into())
         .spawn(move || {
             let delay = 60;
             info!("Starting registration thread, delay is {}s", delay);
