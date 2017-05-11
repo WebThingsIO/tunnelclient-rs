@@ -109,7 +109,7 @@ fn main() {
         Err(_) => {
             let client = TunnelClient::new(HOST, None, None);
             let client = client
-                .subscribe(&user_name)
+                .subscribe(&user_name, None)
                 .expect("Failed to subscribe!");
             let token = client.token.unwrap();
             info!("New client token is {}", token);

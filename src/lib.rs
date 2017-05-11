@@ -10,9 +10,11 @@ extern crate serde;
 #[macro_use]
 extern crate serde_derive;
 extern crate serde_json;
+extern crate url;
 
 use acme_client::Directory;
 use acme_client::error::Error as AcmeError;
+use url::percent_encoding::{percent_encode, QUERY_ENCODE_SET};
 use reqwest::{Client, StatusCode};
 
 pub struct TunnelClient {
@@ -29,6 +31,10 @@ pub enum TunnelClientError {
     BadRequest,
     Other(String),
     Acme(AcmeError),
+}
+
+fn url_param(param: &str) -> String {
+    percent_encode(param.as_bytes(), QUERY_ENCODE_SET).collect::<String>()
 }
 
 impl std::convert::From<AcmeError> for TunnelClientError {
@@ -53,12 +59,14 @@ impl TunnelClient {
     }
 
     // Triggers a subscription.
-    pub fn subscribe(&self, name: &str) -> Option<Self> {
+    pub fn subscribe(&self, name: &str, description: Option<&str>) -> Option<Self> {
         let client = Client::new().expect("Client creation failure");
-        match client
-                  .get(&format!("{}/subscribe?name={}", self.tunnel_url, name))
-                  .send() {
+        let mut url: String = format!("{}/subscribe?name={}", self.tunnel_url, url_param(name));
+        if let Some(desc) = description {
+            url.push_str(&format!("&desc={}", url_param(desc)));
+        }
 
+        match client.get(&url).send() {
             // If the status is 200, the response is {"name": "xxx", "token": "yyy"}
             Ok(mut response) => {
                 if *response.status() == StatusCode::Ok {
@@ -95,8 +103,8 @@ impl TunnelClient {
                 match client
                           .get(&format!("{}/register?token={}&local_ip={}",
                                         self.tunnel_url,
-                                        token,
-                                        local_ip))
+                                        url_param(token),
+                                        url_param(local_ip)))
                           .send() {
                     Ok(response) => {
                         if *response.status() == StatusCode::Ok {
@@ -145,9 +153,9 @@ impl TunnelClient {
                 let client = Client::new().expect("Client creation failure");
                 client
                     .get(&format!("{}/dnsconfig?token={}&challenge={}",
-                                self.tunnel_url,
-                                token,
-                                signature))
+                                  self.tunnel_url,
+                                  url_param(token),
+                                  url_param(&signature)))
                     .send()?;
 
                 dns_challenge.validate()?;
