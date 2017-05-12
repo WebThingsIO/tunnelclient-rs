@@ -132,10 +132,6 @@ fn main() {
 
     // Register the endpoint every minute to keep our record up to date.
 
-    let local_ip = get_ip_addr(&None).expect("Failed to get the local ip address!");
-
-    info!("local ip is {}", local_ip);
-
     let u_name = user_name.clone();
     let handle = thread::Builder::new()
         .name("registration".into())
@@ -144,6 +140,7 @@ fn main() {
             info!("Starting registration thread, delay is {}s", delay);
             loop {
                 thread::sleep(Duration::new(delay as u64, 0));
+                let local_ip = get_ip_addr(&None).expect("Failed to get the local ip address!");
                 let client = TunnelClient::new(HOST, Some(token.clone()), Some(u_name.clone()));
                 info!("Registering `{}.box.{}` with {}", u_name, DOMAIN, local_ip);
                 // Ignore errors that could be transient.
