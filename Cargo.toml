@@ -8,9 +8,9 @@ acme-client = "0.4"
 env_logger = "0.3"
 get_if_addrs = { git = "https://github.com/maidsafe-archive/get_if_addrs" }
 log = "0.3"
-pagekite = { git = "https://github.com/fabricedesre/pagekite-rs.git" }
-reqwest = "0.5"
-serde = "0.9"
-serde_derive = "0.9"
-serde_json = "0.9"
+pagekite = { git = "https://github.com/fabricedesre/pagekite-rs" }
+registration_server = { git = "https://github.com/moziot/registration_server" }
+reqwest = "0.6"
+serde = "1.0"
+serde_json = "1.0"
 url = { version = "1.4", features = ["query_encoding"] }

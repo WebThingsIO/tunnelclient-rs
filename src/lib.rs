@@ -5,15 +5,15 @@
 extern crate acme_client;
 #[macro_use]
 extern crate log;
+extern crate registration_server;
 extern crate reqwest;
 extern crate serde;
-#[macro_use]
-extern crate serde_derive;
 extern crate serde_json;
 extern crate url;
 
 use acme_client::Directory;
 use acme_client::error::Error as AcmeError;
+use registration_server::api_types::NameAndToken;
 use url::percent_encoding::{percent_encode, QUERY_ENCODE_SET};
 use reqwest::{Client, StatusCode};
 
@@ -70,11 +70,6 @@ impl TunnelClient {
             // If the status is 200, the response is {"name": "xxx", "token": "yyy"}
             Ok(mut response) => {
                 if *response.status() == StatusCode::Ok {
-                    #[derive(Deserialize)]
-                    struct NameAndToken {
-                        name: String,
-                        token: String,
-                    }
                     let data: Result<NameAndToken, reqwest::Error> = response.json();
                     match data {
                         Ok(n_t) => {
@@ -173,18 +168,5 @@ impl TunnelClient {
                    domain);
             return Err(TunnelClientError::NoToken);
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::TunnelClient;
-
-    #[test]
-    fn test_api() {
-        let client = TunnelClient::new("http://localhost:4242", None, None);
-        let client = client.subscribe("fabrice").unwrap();
-        assert_eq!(client.name, Some("fabrice".to_owned()));
-        assert_eq!(client.token.is_some(), true);
     }
 }
