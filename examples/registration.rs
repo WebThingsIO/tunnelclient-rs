@@ -130,6 +130,11 @@ fn main() {
         info!("We have a certificate and a key already, skipping Let's Encrypt challenge.");
     }
 
+    let client = TunnelClient::new(HOST, Some(token.clone()), Some(user_name.to_owned()));
+    if let Ok(info) = client.info() {
+        info!("Full record is {:?}", info);
+    }
+
     // Register the endpoint every minute to keep our record up to date.
 
     let u_name = user_name.clone();

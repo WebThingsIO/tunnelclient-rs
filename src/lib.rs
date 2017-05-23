@@ -13,7 +13,7 @@ extern crate url;
 
 use acme_client::Directory;
 use acme_client::error::Error as AcmeError;
-use registration_server::api_types::NameAndToken;
+use registration_server::api_types::{Discovered, NameAndToken, ServerInfo};
 use url::percent_encoding::{percent_encode, QUERY_ENCODE_SET};
 use reqwest::{Client, StatusCode};
 
@@ -49,6 +49,40 @@ impl std::convert::From<reqwest::Error> for TunnelClientError {
     }
 }
 
+// Macro that helps with declaring API endpoints.
+macro_rules! api_endpoint {
+    ($name:ident, $base:expr, $with_token:expr, $ret:ty) => (
+        pub fn $name(&self, params: &Vec<(&str, Option<&str>)>) -> Result<$ret, TunnelClientError> {
+            if $with_token {
+                if self.token.is_none() {
+                    error!("No token available!");
+                    return Err(TunnelClientError::NoToken);
+                }
+            }
+
+            let client = Client::new().expect("Client creation failure");
+            match client
+                    .get(&self.get_full_url($base, params, $with_token))
+                    .send() {
+                Ok(mut response) => {
+                    if *response.status() == StatusCode::Ok {
+                        let info: Result<$ret, reqwest::Error> = response.json();
+                        match info {
+                            Ok(info) => {
+                                Ok(info)
+                            }
+                            Err(err) => Err(TunnelClientError::from(err)),
+                        }
+                    } else {
+                        Err(TunnelClientError::BadRequest)
+                    }
+                }
+                Err(err) => Err(TunnelClientError::from(err)),
+            }
+        }
+    )
+}
+
 impl TunnelClient {
     pub fn new(tunnel_url: &str, token: Option<String>, name: Option<String>) -> Self {
         TunnelClient {
@@ -58,64 +92,86 @@ impl TunnelClient {
         }
     }
 
-    // Triggers a subscription.
-    pub fn subscribe(&self, name: &str, description: Option<&str>) -> Option<Self> {
-        let client = Client::new().expect("Client creation failure");
-        let mut url: String = format!("{}/subscribe?name={}", self.tunnel_url, url_param(name));
-        if let Some(desc) = description {
-            url.push_str(&format!("&desc={}", url_param(desc)));
+    fn get_full_url(&self,
+                    path: &str,
+                    params: &Vec<(&str, Option<&str>)>,
+                    include_token: bool)
+                    -> String {
+        let mut url = format!("{}/{}", self.tunnel_url, path);
+        let mut sep = "?";
+        for param in params {
+            if let Some(pvalue) = param.1 {
+                url.push_str(&format!("{}{}={}", sep, param.0, url_param(pvalue)));
+                sep = "&";
+            }
         }
 
-        match client.get(&url).send() {
-            // If the status is 200, the response is {"name": "xxx", "token": "yyy"}
-            Ok(mut response) => {
-                if *response.status() == StatusCode::Ok {
-                    let data: Result<NameAndToken, reqwest::Error> = response.json();
-                    match data {
-                        Ok(n_t) => {
-                            Some(TunnelClient {
-                                     tunnel_url: self.tunnel_url.clone(),
-                                     token: Some(n_t.token),
-                                     name: Some(n_t.name),
-                                 })
-                        }
-                        Err(_) => None,
-                    }
-                } else {
-                    None
-                }
+        if include_token {
+            if let Some(ref token) = self.token {
+                url.push_str(&format!("{}token={}", sep, url_param(&token)));
+            }
+        }
+
+        url
+    }
+
+    api_endpoint!(call_subscribe, "subscribe", false, NameAndToken);
+    pub fn subscribe(&self, name: &str, description: Option<&str>) -> Option<Self> {
+        match self.call_subscribe(&vec![("name", Some(name)), ("desc", description)]) {
+            Ok(n_t) => {
+                Some(TunnelClient {
+                         tunnel_url: self.tunnel_url.clone(),
+                         token: Some(n_t.token),
+                         name: Some(n_t.name),
+                     })
             }
             Err(_) => None,
         }
     }
 
-    // Renew the registration with a given local ip.
-    // Will return false if this failed for any reason.
+    api_endpoint!(call_unsubscribe, "unsubscribe", true, ());
+    pub fn unsubscribe(&self) -> Result<(), TunnelClientError> {
+        self.call_unsubscribe(&vec![])
+    }
+
+    api_endpoint!(call_register, "register", true, ());
     pub fn register(&self, local_ip: &str) -> Result<(), TunnelClientError> {
-        match self.token {
-            Some(ref token) => {
-                let client = Client::new().expect("Client creation failure");
-                match client
-                          .get(&format!("{}/register?token={}&local_ip={}",
-                                        self.tunnel_url,
-                                        url_param(token),
-                                        url_param(local_ip)))
-                          .send() {
-                    Ok(response) => {
-                        if *response.status() == StatusCode::Ok {
-                            Ok(())
-                        } else {
-                            Err(TunnelClientError::BadRequest)
-                        }
-                    }
-                    Err(err) => Err(TunnelClientError::from(err)),
-                }
-            }
-            None => {
-                error!("No token available to register {}", local_ip);
-                Err(TunnelClientError::NoToken)
-            }
-        }
+        self.call_register(&vec![("local_ip", Some(local_ip))])
+    }
+
+    api_endpoint!(call_dnsconfig, "dnsconfig", true, ());
+    pub fn dnsconfig(&self, challenge: &str) -> Result<(), TunnelClientError> {
+        self.call_dnsconfig(&vec![("challenge", Some(challenge))])
+    }
+
+    api_endpoint!(call_info, "info", true, ServerInfo);
+    pub fn info(&self) -> Result<ServerInfo, TunnelClientError> {
+        self.call_info(&vec![])
+    }
+
+    api_endpoint!(call_ping, "ping", true, Discovered);
+    pub fn ping(&self) -> Result<Discovered, TunnelClientError> {
+        self.call_ping(&vec![])
+    }
+
+    api_endpoint!(call_adddiscovery, "adddiscovery", true, ());
+    pub fn adddiscovery(&self, disco: &str) -> Result<(), TunnelClientError> {
+        self.call_adddiscovery(&vec![("disco", Some(disco))])
+    }
+
+    api_endpoint!(call_revokediscovery, "adddiscovery", true, ());
+    pub fn revokediscovery(&self, disco: &str) -> Result<(), TunnelClientError> {
+        self.call_revokediscovery(&vec![("disco", Some(disco))])
+    }
+
+    api_endpoint!(call_setemail, "setemail", true, ());
+    pub fn setemail(&self, email: &str) -> Result<(), TunnelClientError> {
+        self.call_setemail(&vec![("email", Some(email))])
+    }
+
+    api_endpoint!(call_revokeemail, "revokeemail", true, ());
+    pub fn revokeemail(&self, email: &str) -> Result<(), TunnelClientError> {
+        self.call_revokeemail(&vec![("email", Some(email))])
     }
 
     // Starts the LE workflow.
@@ -148,9 +204,9 @@ impl TunnelClient {
                 let client = Client::new().expect("Client creation failure");
                 client
                     .get(&format!("{}/dnsconfig?token={}&challenge={}",
-                                  self.tunnel_url,
-                                  url_param(token),
-                                  url_param(&signature)))
+                                 self.tunnel_url,
+                                 url_param(token),
+                                 url_param(&signature)))
                     .send()?;
 
                 dns_challenge.validate()?;
