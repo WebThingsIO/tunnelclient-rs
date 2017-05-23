@@ -53,7 +53,7 @@ impl From<reqwest::Error> for TunnelClientError {
 // Macros that helps with declaring API endpoints.
 macro_rules! api_endpoint {
     ($name:ident, $base:expr, $with_token:expr, $ret:ty) => (
-        pub fn $name(&self, params: &Vec<(&str, Option<&str>)>) -> Result<$ret, TunnelClientError> {
+        pub fn $name(&self, params: &[(&str, Option<&str>)]) -> Result<$ret, TunnelClientError> {
             if $with_token {
                 if self.token.is_none() {
                     error!("No token available!");
@@ -85,7 +85,7 @@ macro_rules! api_endpoint {
 // Special case for empty answers.
 macro_rules! empty_api_endpoint {
     ($name:ident, $base:expr, $with_token:expr) => (
-        pub fn $name(&self, params: &Vec<(&str, Option<&str>)>) -> Result<(), TunnelClientError> {
+        pub fn $name(&self, params: &[(&str, Option<&str>)]) -> Result<(), TunnelClientError> {
             if $with_token {
                 if self.token.is_none() {
                     error!("No token available!");
@@ -121,7 +121,7 @@ impl TunnelClient {
 
     fn get_full_url(&self,
                     path: &str,
-                    params: &Vec<(&str, Option<&str>)>,
+                    params: &[(&str, Option<&str>)],
                     include_token: bool)
                     -> String {
         let mut url = format!("{}/{}", self.tunnel_url, path);
@@ -135,7 +135,7 @@ impl TunnelClient {
 
         if include_token {
             if let Some(ref token) = self.token {
-                url.push_str(&format!("{}token={}", sep, url_param(&token)));
+                url.push_str(&format!("{}token={}", sep, url_param(token)));
             }
         }
 
@@ -144,7 +144,7 @@ impl TunnelClient {
 
     api_endpoint!(call_subscribe, "subscribe", false, NameAndToken);
     pub fn subscribe(&self, name: &str, description: Option<&str>) -> Option<Self> {
-        match self.call_subscribe(&vec![("name", Some(name)), ("desc", description)]) {
+        match self.call_subscribe(&[("name", Some(name)), ("desc", description)]) {
             Ok(n_t) => {
                 Some(TunnelClient {
                          tunnel_url: self.tunnel_url.clone(),
@@ -158,47 +158,47 @@ impl TunnelClient {
 
     empty_api_endpoint!(call_unsubscribe, "unsubscribe", true);
     pub fn unsubscribe(&self) -> Result<(), TunnelClientError> {
-        self.call_unsubscribe(&vec![])
+        self.call_unsubscribe(&[])
     }
 
     empty_api_endpoint!(call_register, "register", true);
     pub fn register(&self, local_ip: &str) -> Result<(), TunnelClientError> {
-        self.call_register(&vec![("local_ip", Some(local_ip))])
+        self.call_register(&[("local_ip", Some(local_ip))])
     }
 
     empty_api_endpoint!(call_dnsconfig, "dnsconfig", true);
     pub fn dnsconfig(&self, challenge: &str) -> Result<(), TunnelClientError> {
-        self.call_dnsconfig(&vec![("challenge", Some(challenge))])
+        self.call_dnsconfig(&[("challenge", Some(challenge))])
     }
 
     api_endpoint!(call_info, "info", true, ServerInfo);
     pub fn info(&self) -> Result<ServerInfo, TunnelClientError> {
-        self.call_info(&vec![])
+        self.call_info(&[])
     }
 
     api_endpoint!(call_ping, "ping", true, Discovered);
     pub fn ping(&self) -> Result<Discovered, TunnelClientError> {
-        self.call_ping(&vec![])
+        self.call_ping(&[])
     }
 
     empty_api_endpoint!(call_adddiscovery, "adddiscovery", true);
     pub fn adddiscovery(&self, disco: &str) -> Result<(), TunnelClientError> {
-        self.call_adddiscovery(&vec![("disco", Some(disco))])
+        self.call_adddiscovery(&[("disco", Some(disco))])
     }
 
     empty_api_endpoint!(call_revokediscovery, "adddiscovery", true);
     pub fn revokediscovery(&self, disco: &str) -> Result<(), TunnelClientError> {
-        self.call_revokediscovery(&vec![("disco", Some(disco))])
+        self.call_revokediscovery(&[("disco", Some(disco))])
     }
 
     empty_api_endpoint!(call_setemail, "setemail", true);
     pub fn setemail(&self, email: &str) -> Result<(), TunnelClientError> {
-        self.call_setemail(&vec![("email", Some(email))])
+        self.call_setemail(&[("email", Some(email))])
     }
 
     empty_api_endpoint!(call_revokeemail, "revokeemail", true);
     pub fn revokeemail(&self, email: &str) -> Result<(), TunnelClientError> {
-        self.call_revokeemail(&vec![("email", Some(email))])
+        self.call_revokeemail(&[("email", Some(email))])
     }
 
     // Starts the LE workflow.
@@ -224,8 +224,8 @@ impl TunnelClient {
 
         let domains = [remote_domain.as_str(), local_domain.as_str()];
 
-        for domain in domains.iter() {
-            let authorization = account.authorization(&domain)?;
+        for domain in &domains {
+            let authorization = account.authorization(domain)?;
             let dns_challenge = match authorization.get_dns_challenge() {
                 Some(challenge) => challenge,
                 None => return Err(TunnelClientError::NoChallenge),
