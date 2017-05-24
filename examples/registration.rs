@@ -15,9 +15,10 @@ use std::env;
 use std::fs::File;
 use std::io::Error;
 use std::io::prelude::*;
+use std::path::Path;
 use std::thread;
 use std::time::Duration;
-use tunnelclient::TunnelClient;
+use tunnelclient::http_api::TunnelClient;
 
 const HOST: &'static str = "http://knilxof.org";
 const DOMAIN: &'static str = "knilxof.org";
@@ -124,7 +125,7 @@ fn main() {
     if File::open("certificate.pem").is_err() || File::open("privatekey.pem").is_err() {
         let client = TunnelClient::new(HOST, Some(token.clone()), Some(user_name.to_owned()));
         client
-            .lets_encrypt(DOMAIN)
+            .lets_encrypt(DOMAIN, Path::new("."))
             .expect("Failed to complete the DNS challenge");
     } else {
         info!("We have a certificate and a key already, skipping Let's Encrypt challenge.");
