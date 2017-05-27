@@ -3,13 +3,11 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 extern crate env_logger;
-extern crate get_if_addrs;
 #[macro_use]
 extern crate log;
 extern crate pagekite;
 extern crate tunnelclient;
 
-use get_if_addrs::{IfAddr, Interface};
 use pagekite::{PageKite, InitFlags, LOG_NORMAL};
 use std::env;
 use std::fs::File;
@@ -18,6 +16,7 @@ use std::io::prelude::*;
 use std::path::Path;
 use std::thread;
 use std::time::Duration;
+use tunnelclient::ip_addrs::get_ip_addr;
 use tunnelclient::http_api::TunnelClient;
 
 const HOST: &'static str = "http://knilxof.org";
@@ -32,65 +31,6 @@ fn get_saved_token() -> Result<String, Error> {
     let mut contents = String::new();
     file.read_to_string(&mut contents)?;
     Ok(contents)
-}
-
-fn get_ip_addr_from_ifaces(ifaces: &[Interface], want_iface: &Option<String>) -> Option<String> {
-
-    let mut ip_addr: Option<String> = None;
-    let mut ipv6_addr: Option<String> = None;
-
-    for iface in ifaces {
-        match want_iface.as_ref() {
-                None =>
-                    // Whitelist known good iface
-                    if !(iface.name.starts_with("eth") ||
-                         iface.name.starts_with("wlan") ||
-                         iface.name.starts_with("en") ||
-                         iface.name.starts_with("em") ||
-                         iface.name.starts_with("wlp3s") ||
-                         iface.name.starts_with("wlp4s")) {
-                        continue;
-                    },
-                    Some(iface_name) =>
-                        if &iface.name != iface_name {
-                            continue;
-                        }
-            }
-        if let IfAddr::V4(ref v4) = iface.addr {
-            ip_addr = Some(format!("{}", v4.ip));
-            break;
-        } else if ipv6_addr.is_none() {
-            if let IfAddr::V6(ref v6) = iface.addr {
-                ipv6_addr = Some(format!("{}", v6.ip));
-            }
-        }
-    }
-
-    if ip_addr.is_none() {
-        if ipv6_addr.is_none() {
-            error!("No IP interfaces found!");
-        } else {
-            ip_addr = ipv6_addr;
-        }
-    }
-    ip_addr
-}
-
-/// return the host IP address of the first valid interface.
-/// `want_iface` is an options string for the interface you want.
-pub fn get_ip_addr(want_iface: &Option<String>) -> Option<String> {
-    // Look for an ipv4 interface on eth* or wlan*.
-    if let Ok(ifaces) = get_if_addrs::get_if_addrs() {
-        if ifaces.is_empty() {
-            error!("No IP interfaces found!");
-            return None;
-        }
-
-        get_ip_addr_from_ifaces(&ifaces, want_iface)
-    } else {
-        error!("No IP interfaces found!");
-        None
-    }
 }
 
 fn main() {
@@ -108,7 +48,7 @@ fn main() {
     let token = match get_saved_token() {
         Ok(token) => token,
         Err(_) => {
-            let client = TunnelClient::new(HOST, None, None);
+            let client = TunnelClient::new(HOST, None);
             let client = client
                 .subscribe(&user_name, None)
                 .expect("Failed to subscribe!");
@@ -123,15 +63,15 @@ fn main() {
     // Check if we have cert.pem and key.pem and trigger the Let's Encrypt
     // flow if not.
     if File::open("certificate.pem").is_err() || File::open("privatekey.pem").is_err() {
-        let client = TunnelClient::new(HOST, Some(token.clone()), Some(user_name.to_owned()));
+        let client = TunnelClient::new(HOST, Some(token.clone()));
         client
-            .lets_encrypt(DOMAIN, Path::new("."))
+            .lets_encrypt(DOMAIN, &user_name, Path::new("."))
             .expect("Failed to complete the DNS challenge");
     } else {
         info!("We have a certificate and a key already, skipping Let's Encrypt challenge.");
     }
 
-    let client = TunnelClient::new(HOST, Some(token.clone()), Some(user_name.to_owned()));
+    let client = TunnelClient::new(HOST, Some(token.clone()));
     if let Ok(info) = client.info() {
         info!("Full record is {:?}", info);
     }
@@ -147,7 +87,7 @@ fn main() {
             loop {
                 thread::sleep(Duration::new(delay as u64, 0));
                 let local_ip = get_ip_addr(&None).expect("Failed to get the local ip address!");
-                let client = TunnelClient::new(HOST, Some(token.clone()), Some(u_name.clone()));
+                let client = TunnelClient::new(HOST, Some(token.clone()));
                 info!("Registering `{}.box.{}` with {}", u_name, DOMAIN, local_ip);
                 // Ignore errors that could be transient.
                 client.register(&local_ip).unwrap_or(());

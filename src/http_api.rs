@@ -13,7 +13,6 @@ use std::path::Path;
 pub struct TunnelClient {
     pub tunnel_url: String,
     pub token: Option<String>,
-    pub name: Option<String>,
 }
 
 #[derive(Debug)]
@@ -103,11 +102,10 @@ macro_rules! empty_api_endpoint {
 }
 
 impl TunnelClient {
-    pub fn new(tunnel_url: &str, token: Option<String>, name: Option<String>) -> Self {
+    pub fn new(tunnel_url: &str, token: Option<String>) -> Self {
         TunnelClient {
             tunnel_url: tunnel_url.to_owned(),
             token: token,
-            name: name,
         }
     }
 
@@ -141,7 +139,6 @@ impl TunnelClient {
                 Some(TunnelClient {
                          tunnel_url: self.tunnel_url.clone(),
                          token: Some(n_t.token),
-                         name: Some(n_t.name),
                      })
             }
             Err(_) => None,
@@ -193,15 +190,12 @@ impl TunnelClient {
         self.call_revokeemail(&[("email", Some(email))])
     }
 
-    // Starts the LE workflow.
-    pub fn lets_encrypt(&self, domain: &str, path: &Path) -> Result<(), TunnelClientError> {
-        let name = if let Some(ref name) = self.name {
-            name
-        } else {
-            error!("Can't run lets_encrypt without a name");
-            return Err(TunnelClientError::NoName);
-        };
-
+    // Starts the LE flow.
+    pub fn lets_encrypt(&self,
+                        domain: &str,
+                        name: &str,
+                        path: &Path)
+                        -> Result<(), TunnelClientError> {
         if self.token.is_none() {
             error!("No token available to retrieve the certificate for {}",
                    domain);

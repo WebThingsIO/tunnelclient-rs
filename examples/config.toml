@@ -1,0 +1,9 @@
+# Driver configuration file.
+
+domain = "knilxof.org"
+tunnel_port = 4443
+local_port = 4443
+tunnel_secret = "moziot"
+api_endpoint = "http://knilxof.org"
+registration_delay = 60
+data_dir = "."
