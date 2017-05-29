@@ -20,6 +20,7 @@ pub enum State {
     Unsubscribed,
     NeedCertificates,
     Ready,
+    Paused,
 }
 
 #[derive(Clone, Deserialize)]
@@ -192,14 +193,17 @@ pub enum DriverMessage {
     Unsubscribe,
     GetCertificates,
     UpdateRegistration,
+    Pause,
+    Resume,
+    Stop,
 }
 
 // Process a message by checking the current state and triggering the appropriate action.
 // TODO: move to a job queue running on its own thread.
-
+// Returns `true` if we need to shutdown the driver.
 pub fn process_message(driver: &mut Driver,
                        message: &DriverMessage,
-                       sink: &Sender<DriverMessage>) {
+                       sink: &Sender<DriverMessage>) -> bool {
     match *message {
         DriverMessage::GetState => {
             sink.send(DriverMessage::State(driver.state.clone()))
@@ -209,7 +213,7 @@ pub fn process_message(driver: &mut Driver,
             // If our state is not `Unsubscribed` bail out.
             // TODO: return some error instead.
             if driver.state != State::Unsubscribed {
-                return;
+                return false;
             }
 
             if let Some(client) = driver.get_client().subscribe(name, Some(desc)) {
@@ -233,7 +237,7 @@ pub fn process_message(driver: &mut Driver,
             // If our state is `Unsubscribed` bail out.
             // TODO: return some error instead.
             if driver.state == State::Unsubscribed {
-                return;
+                return false;
             }
 
             let start_state = driver.state.clone();
@@ -254,7 +258,7 @@ pub fn process_message(driver: &mut Driver,
             // If our state is not `NeedCertificates` bail out.
             // TODO: return some error instead.
             if driver.state != State::NeedCertificates {
-                return;
+                return false;
             }
 
             if driver
@@ -294,7 +298,7 @@ pub fn process_message(driver: &mut Driver,
         DriverMessage::UpdateRegistration => {
             // Only registers if we are in the `Ready` state.
             if driver.state != State::Ready {
-                return;
+                return false;
             }
 
             let local_ip = get_ip_addr(&None).expect("Failed to get the local ip address!");
@@ -303,8 +307,39 @@ pub fn process_message(driver: &mut Driver,
             // Ignore errors that could be transient.
             driver.get_client().register(&local_ip).unwrap_or(());
         }
+        DriverMessage::Pause => {
+            if driver.state != State::Ready {
+                return false;
+            }
+
+            driver.stop_pagekite();
+
+            driver.set_state(State::Paused);
+                sink.send(DriverMessage::State(State::Paused))
+                    .expect("Failed to send message");
+        }
+        DriverMessage::Resume => {
+            if driver.state != State::Paused {
+                return false;
+            }
+
+            driver.start_pagekite();
+
+            driver.set_state(State::Ready);
+                sink.send(DriverMessage::State(State::Ready))
+                    .expect("Failed to send message");
+        }
+        DriverMessage::Stop => {
+            if driver.state == State::Ready {
+                driver.stop_pagekite();
+            }
+
+            return true;
+        }
         _ => unimplemented!(),
     }
+
+    false
 }
 
 // Registers at regular intervals.
@@ -332,6 +367,8 @@ pub fn start_driver(driver: &Driver, sink: Sender<DriverMessage>) -> Sender<Driv
     thread::Builder::new()
         .name(format!("tunnel driver for {}", driver.config.domain))
         .spawn(move || {
+            info!("Starting driver");
+
             // Starts the PageKite tunnel right away if we are in a `Ready` state.
             if driver.state == State::Ready {
                 driver.start_pagekite();
@@ -340,13 +377,18 @@ pub fn start_driver(driver: &Driver, sink: Sender<DriverMessage>) -> Sender<Driv
             let mut iter = rx.iter();
             loop {
                 match iter.next() {
-                    Some(message) => process_message(&mut driver, &message, &sink),
+                    Some(message) => {
+                        if process_message(&mut driver, &message, &sink) {
+                            break;
+                        }
+                    }
                     None => {
                         info!("Exiting driver thread!");
                         break;
                     }
                 }
             }
+            info!("Stopping driver");
         })
         .expect("Failed to start tunnel driver thread");
 
