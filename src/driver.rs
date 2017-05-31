@@ -15,7 +15,7 @@ use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use toml;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
 pub enum State {
     Unsubscribed,
     NeedCertificates,
@@ -364,6 +364,8 @@ pub fn start_driver(driver: &Driver, sink: Sender<DriverMessage>) -> Sender<Driv
 
     let (tx, rx) = channel::<DriverMessage>();
 
+    let tx2 = tx.clone();
+
     thread::Builder::new()
         .name(format!("tunnel driver for {}", driver.config.domain))
         .spawn(move || {
@@ -371,6 +373,7 @@ pub fn start_driver(driver: &Driver, sink: Sender<DriverMessage>) -> Sender<Driv
 
             // Starts the PageKite tunnel right away if we are in a `Ready` state.
             if driver.state == State::Ready {
+                start_registration(delay, tx2);
                 driver.start_pagekite();
             }
 
@@ -391,8 +394,6 @@ pub fn start_driver(driver: &Driver, sink: Sender<DriverMessage>) -> Sender<Driv
             info!("Stopping driver");
         })
         .expect("Failed to start tunnel driver thread");
-
-    start_registration(delay, tx.clone());
 
     tx
 }
