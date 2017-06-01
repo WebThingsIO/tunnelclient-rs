@@ -4,7 +4,7 @@
 
 use acme_client::Directory;
 use acme_client::error::Error as AcmeError;
-use registration_server::api_types::{Discovered, NameAndToken, ServerInfo};
+use types::{Discovered, NameAndToken, ServerInfo};
 use url::percent_encoding::{percent_encode, QUERY_ENCODE_SET};
 use reqwest::{Client, Error as ReqwestError, StatusCode};
 use std::convert::From;

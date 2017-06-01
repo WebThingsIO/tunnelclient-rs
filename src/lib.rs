@@ -9,7 +9,7 @@ extern crate get_if_addrs;
 #[macro_use]
 extern crate log;
 extern crate pagekite;
-extern crate registration_server;
+extern crate registration_types as types;
 extern crate reqwest;
 extern crate serde;
 #[macro_use]

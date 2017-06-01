@@ -10,7 +10,7 @@ error-chain = "0.10"
 get_if_addrs = { git = "https://github.com/maidsafe-archive/get_if_addrs" }
 log = "0.3"
 pagekite = { git = "https://github.com/fabricedesre/pagekite-rs" }
-registration_server = { git = "https://github.com/moziot/registration_server" }
+registration_types = { git = "https://github.com/moziot/registration_server" }
 reqwest = "0.6"
 serde = "1.0"
 serde_derive = "1.0"
